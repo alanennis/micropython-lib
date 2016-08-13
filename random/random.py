@@ -1,5 +1,13 @@
+# Simple lfsr based implemenration of the module random.
+# The default lfsr is 30bits long to keep it fast, a bigger polynomial can be used. 
 
-from math import log as _log, exp as _exp, pi as _pi, e as _e, ceil as _ceil
+__all__ = ["Random","seed","random","uniform","randint","choice","sample",
+           "randrange","shuffle","normalvariate","lognormvariate",
+           "expovariate","vonmisesvariate","gammavariate","triangular",
+           "gauss","betavariate","paretovariate","weibullvariate",
+           "getstate","setstate", "getrandbits"]
+
+from math import  log as _log, exp as _exp, pi as _pi, e as _e, ceil as _ceil
 from math import sqrt as _sqrt, acos as _acos, cos as _cos, sin as _sin
 
 NV_MAGICCONST = 4 * _exp(-0.5)/_sqrt(2.0)
@@ -7,24 +15,16 @@ TWOPI = 2.0*_pi
 LOG4 = _log(4.0)
 SG_MAGICCONST = 1.0 + _log(4.5)
 
-# Not every port supports log2 nor have a good enough floating precision for log
-def __bit_size(val):
-    size=0
-    while val > 0:
-        val>>=1
-        size+=1
-    return size
-
 class Random():
 
 
     def __init__(self, polynomial = 0x20000029):
         self.state = 1
-        self.lfsrsize = __bit_size(polynomial)
+        self.lfsrsize = int(_log(polynomial,2))+1
         self.lsb = 2**-self.lfsrsize
         self.poly = polynomial
-        self.gauss_next = 0.0 
-    def __shift(self):
+        self.gauss_next = None 
+    def _shift(self):
         if self.state & 1 != 0:
             self.state>>=1
             self.state^=self.poly
@@ -38,7 +38,7 @@ class Random():
         self.state=state
 
     def random(self):
-        self.__shift()
+        self._shift()
         return (self.state-1) *  self.lsb
 
     def getrandbits(self, k):
@@ -46,12 +46,12 @@ class Random():
         x = 0
         for i in range(0,numpass):
             x<<=self.lfsrsize
-            self.__shift()
+            self._shift()
             x+=self.state 
         return x >> (numpass * self.lfsrsize - k)
 
     def seed(self, *args, **kwds):
-        self.state =  args[0]
+        self.setstate(args[0])
         return None
 
 ## ---- Methods below this point do not need to be overridden when
@@ -86,7 +86,7 @@ class Random():
             raise ValueError("non-integer arg 1 for randrange()")
         if stop is None:
             if istart > 0:
-                return self._randbelow(istart)
+                return self.randint(0,istart-1)
             raise ValueError("empty range for randrange()")
 
         # stop argument supplied.
@@ -95,7 +95,7 @@ class Random():
             raise ValueError("non-integer stop for randrange()")
         width = istop - istart
         if step == 1 and width > 0:
-            return istart + self._randbelow(width)
+            return istart + self.randint(0,width-1)
         if step == 1:
             raise ValueError("empty range for randrange() (%d,%d, %d)" % (istart, istop, width))
 
@@ -113,13 +113,13 @@ class Random():
         if n <= 0:
             raise ValueError("empty range for randrange()")
 
-        return istart + istep*self._randbelow(n)
+        return istart + istep*self.randint(0,n-1)
 
     def randint(self, a, b):
         """Return random integer in range [a, b], including both end points.
         """
 
-        return self.randrange(a, b+1)
+        return int(self.uniform(a,b+1))
 
 ## -------------------- sequence methods  -------------------
 
@@ -176,7 +176,6 @@ class Random():
             population = tuple(population)
         if not isinstance(population, _collections.Sequence):
             raise TypeError("Population must be a sequence or Set.  For dicts, use list(d).")
-        randbelow = self._randbelow
         n = len(population)
         if not 0 <= k <= n:
             raise ValueError("Sample larger than population")
@@ -188,7 +187,7 @@ class Random():
             # An n-length list is smaller than a k-length set
             pool = list(population)
             for i in range(k):         # invariant:  non-selected at [0,n-i)
-                j = randbelow(n-i)
+                j = randint(0,n-i-1)
                 result[i] = pool[j]
                 pool[j] = pool[n-i-1]   # move non-selected item into vacancy
         else:
@@ -197,7 +196,7 @@ class Random():
             for i in range(k):
                 j = randbelow(n)
                 while j in selected:
-                    j = randbelow(n)
+                    j = self.randint(0,n-1)
                 selected_add(j)
                 result[i] = population[j]
         return result
@@ -495,30 +494,6 @@ class Random():
 
         u = 1.0 - self.random()
         return alpha * (-_log(u)) ** (1.0/beta)
-
-## -------------------- test program --------------------
-
-def _test_generator(n, func, args):
-    import time
-    print(n, 'times', func.__name__)
-    total = 0.0
-    sqsum = 0.0
-    smallest = 1e10
-    largest = -1e10
-    t0 = time.time()
-    for i in range(n):
-        x = func(*args)
-        total += x
-        sqsum = sqsum + x*x
-        smallest = min(x, smallest)
-        largest = max(x, largest)
-    t1 = time.time()
-    print(round(t1-t0, 3), 'sec,', end=' ')
-    avg = total/n
-    stddev = _sqrt(sqsum/n - avg*avg)
-    print('avg %g, stddev %g, min %g, max %g' % \
-              (avg, stddev, smallest, largest))
-
 
 # Create one instance, seeded from current time, and export its methods
 # as module-level functions.  The functions share state across all uses
