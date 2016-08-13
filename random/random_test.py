@@ -5,7 +5,7 @@ from random import *
 
 def _test_generator(n, func, args):
     import time
-    print(n, 'times', func.__name__)
+    print(n, 'times', func)
     total = 0.0
     sqsum = 0.0
     smallest = 1e10

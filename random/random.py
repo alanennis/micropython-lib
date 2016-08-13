@@ -7,13 +7,22 @@ TWOPI = 2.0*_pi
 LOG4 = _log(4.0)
 SG_MAGICCONST = 1.0 + _log(4.5)
 
+# Not every port supports log2 nor have a good enough floating precision for log
+def __bit_size(val):
+    size=0
+    while val > 0:
+        val>>=1
+        size+=1
+    return size
+
 class Random():
 
-    def __init__(self, lfsrsize = 32):
+
+    def __init__(self, polynomial = 0x20000029):
         self.state = 1
-        self.lfsrsize = lfsrsize
+        self.lfsrsize = __bit_size(polynomial)
         self.lsb = 2**-self.lfsrsize
-        self.poly = 0x20000029 #LFSR_POLY[self.lfsrsize]
+        self.poly = polynomial
         self.gauss_next = 0.0 
     def __shift(self):
         if self.state & 1 != 0:
